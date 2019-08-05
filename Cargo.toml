@@ -1,5 +1,5 @@
 [package]
-name = "rust-alexa-webservice-verifier"
+name = "alexa-verifier"
 version = "0.1.0"
 authors = ["Cory Forsstrom <cforsstrom18@gmail.com>"]
 edition = "2018"
