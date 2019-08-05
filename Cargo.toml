@@ -5,18 +5,15 @@ authors = ["Cory Forsstrom <cforsstrom18@gmail.com>"]
 edition = "2018"
 
 [lib]
-name = "verifier"
+name = "alexa_verifier"
 path = "src/lib.rs"
-
-[[bin]]
-name = "test"
-path = "src/test.rs"
 
 [dependencies]
 base64 ="0.10"
 der-parser = "2.1"
 failure = "0.1"
-ring = "0.16"
+log = "0.4"
+ring = { version = "0.16", features = ['std'] }
 reqwest = "0.9"
 time = "0.1"
 url = "2.0"

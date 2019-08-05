@@ -1,6 +1,4 @@
-use std::path::Component;
-use std::path::Path;
-use std::path::PathBuf;
+use std::path::{Component, Path, PathBuf};
 
 pub fn normalize_path(p: &Path) -> PathBuf {
     let mut stack: Vec<Component> = vec![];
