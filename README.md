@@ -1,5 +1,5 @@
 # Alexa Rust Webservice Verifier
-![Crates.io](https://img.shields.io/crates/v/alexa-verifier)
+[![Crates.io](https://img.shields.io/crates/v/alexa-verifier)](https://crates.io/crates/alexa-verifier)
 [![](https://docs.rs/alexa-verifier/badge.svg)](https://docs.rs/alexa-verifier)
 
 Verify that incoming requests are from Alexa for custom, webservice skills.
