@@ -1,3 +1,90 @@
+//! Verify that incoming requests are from Alexa for custom, webservice skills.  
+//!
+//! - Confirmed working with the Alexa [certification functional test](https://developer.amazon.com/docs/devconsole/test-and-submit-your-skill.html).
+//!
+//! - Built using the [Developer Documentation](https://developer.amazon.com/docs/custom-skills/host-a-custom-skill-as-a-web-service.html#manually-verify-request-sent-by-alexa)
+//! and [Python Alexa SDK](https://github.com/alexa/alexa-skills-kit-sdk-for-python/tree/master/ask-sdk-webservice-support)
+//! as reference.
+//!
+//! # Using
+//! Example using [Rouille](https://github.com/tomaka/rouille) server
+//! and [alexa_sdk](https://github.com/tarkah/alexa_rust) for request deserialization
+//!
+//! ```rust
+//! use crate::skill::process_request; // Entry point to custom skill
+//! use alexa_verifier::RequestVerifier; // Struct provided by this crate
+//! use log::{debug, error, info};
+//! use rouille::{router, Request, Response};
+//! use std::{
+//!     io::Read,
+//!     sync::{Mutex, MutexGuard},
+//! };
+//!
+//! fn note_routes(request: &Request, verifier: &mut MutexGuard<RequestVerifier>) -> Response {
+//!     router!(request,
+//!         (POST) (/) => {
+//!             info!("Request received...");
+//!
+//!             // Get request body data
+//!             let mut body = request.data().unwrap();
+//!             let mut body_bytes: Vec<u8> = vec![];
+//!             body.read_to_end(&mut body_bytes).unwrap();
+//!
+//!             // Get needed headers, default to blank (will cause verification to fail)
+//!             let signature_cert_chain_url = request.header("SignatureCertChainUrl").unwrap_or("");
+//!             let signature = request.header("Signature").unwrap_or("");
+//!
+//!             // Deserialize using alexa_sdk::Request
+//!             let _request = serde_json::from_slice::<alexa_sdk::Request>(&body_bytes);
+//!             if let Err(e) = _request {
+//!                 error!("Could not deserialize request");
+//!                 error!("{:?}", e);
+//!                 let response = Response::empty_400();
+//!                 info!("Sending back response...");
+//!                 debug!("{:?}", response);
+//!                 return response;
+//!             }
+//!             let request = _request.unwrap();
+//!             debug!("{:?}", request);
+//!
+//!             // alexa-verifier used here, return 400 if verification fails
+//!             if verifier
+//!                 .verify(
+//!                     signature_cert_chain_url,
+//!                     signature,
+//!                     &body_bytes,
+//!                     request.body.timestamp.as_str(),
+//!                     None
+//!                 ).is_err() {
+//!                     error!("Could not validate request came from Alexa");
+//!                     let response = Response::empty_400();
+//!                     info!("Sending back response...");
+//!                     debug!("{:?}", response);
+//!                     return response;
+//!                 };
+//!             debug!("Request is validated...");
+//!
+//!             // Entry point custom to skill, returning alexa_sdk::Response
+//!             let response = Response::json(&process_request(request));
+//!             info!("Sending back response...");
+//!             debug!("{:?}", response);
+//!             response
+//!     },
+//!         _ => Response::empty_404()
+//!     )
+//! }
+//!
+//! pub fn run() -> std::io::Result<()> {
+//!     info!("Starting server on 0.0.0.0:8086");
+//!     let verifier = Mutex::from(RequestVerifier::new());
+//!
+//!     rouille::start_server("0.0.0.0:8086", move |request| {
+//!         let mut verifier = verifier.lock().unwrap();
+//!         note_routes(&request, &mut verifier)
+//!     });
+//! }
+//! ```
+//!
 use failure::{bail, Error, Fail, ResultExt};
 use log::error;
 use std::{collections::HashMap, path::Path};
@@ -15,6 +102,7 @@ const CERT_CHAIN_DOMAIN: &str = "echo-api.amazon.com";
 const DEFAULT_TIMESTAMP_TOLERANCE_IN_MILLIS: i64 = 150_000;
 const MAX_TIMESTAMP_TOLERANCE_IN_MILLIS: i64 = 3_600_000;
 
+/// Error detailing why verification failed
 #[derive(Debug, Fail)]
 pub enum VerificationError {
     #[fail(display = "Failed to validate URL")]
@@ -54,11 +142,21 @@ pub enum VerificationError {
     Timestamp,
 }
 
+/// Exposes verify method and caches new certificates on the first request
 #[derive(Clone)]
 pub struct RequestVerifier {
     cert_cache: HashMap<String, Vec<u8>>,
 }
 
+/// ```rust
+/// impl Default for RequestVerifier {
+///     fn default() -> Self {
+///         RequestVerifier {
+///             cert_cache: HashMap::new(),
+///         }
+///     }
+/// }
+/// ```
 impl Default for RequestVerifier {
     fn default() -> Self {
         RequestVerifier {
@@ -68,10 +166,20 @@ impl Default for RequestVerifier {
 }
 
 impl RequestVerifier {
+    /// Create default instance with an empty cache
     pub fn new() -> Self {
         RequestVerifier::default()
     }
 
+    /// Verify that the request came from Alexa.  
+    ///
+    /// - `SignatureCertChainUrl` and `Signature` are headers of the request
+    ///
+    /// - Pass the entire body of the request for signature verification
+    ///
+    /// - Timestamp comes from the body, `{ "request" : { "timestamp": "" } }`. If deserialized using [alexa_sdk](https://github.com/tarkah/alexa_rust) then timestamp can be taken from `alexa_sdk::Request.body.timestamp`
+    ///
+    /// - A tolerance value in milliseconds can be passed to verify the request was received within that tolerance (default is `150_000`)
     pub fn verify(
         &mut self,
         signature_cert_chain_url: &str,
@@ -97,9 +205,10 @@ impl RequestVerifier {
         signature: &str,
         body: &[u8],
     ) -> Result<(), Error> {
+        // First, validate cert url
         self.validate_cert_url(&signature_cert_chain_url)?;
 
-        // Look for certificate in cache, download it if it doesn't exist
+        // Look for certificate in cache, if not, download using validated url
         let mut not_exists = false;
         if !self
             .cert_cache
@@ -131,25 +240,25 @@ impl RequestVerifier {
         // Make sure domain is in SAN extension
         // Only need to validate first time cert is downloaded
         if not_exists {
-        let mut sans: Vec<&str> = Vec::new();
-        for ext in &certificate.tbs_certificate.extensions {
-            if ext.oid == x509_parser::objects::nid2obj(&Nid::SubjectAltName).unwrap() {
-                let (_, ber) = der_parser::parse_der(&ext.value)
-                    .map_err(|_| VerificationError::CertExtParse)?;
-                for b in ber.into_iter() {
-                    if let der_parser::ber::BerObjectContent::Unknown(_, i) = b.content {
+            let mut sans: Vec<&str> = Vec::new();
+            for ext in &certificate.tbs_certificate.extensions {
+                if ext.oid == x509_parser::objects::nid2obj(&Nid::SubjectAltName).unwrap() {
+                    let (_, ber) = der_parser::parse_der(&ext.value)
+                        .map_err(|_| VerificationError::CertExtParse)?;
+                    for b in ber.into_iter() {
+                        if let der_parser::ber::BerObjectContent::Unknown(_, i) = b.content {
                             sans.push(
                                 std::str::from_utf8(i).context(VerificationError::SanExtension)?,
                             )
-                    } else {
-                        bail!(VerificationError::SanExtension)
+                        } else {
+                            bail!(VerificationError::SanExtension)
+                        }
                     }
                 }
             }
-        }
-        if !sans.contains(&CERT_CHAIN_DOMAIN) {
-            bail!(VerificationError::DomainNotInSan)
-        }
+            if !sans.contains(&CERT_CHAIN_DOMAIN) {
+                bail!(VerificationError::DomainNotInSan)
+            }
         }
 
         // Get primary key for signature verification
@@ -166,12 +275,12 @@ impl RequestVerifier {
     }
 
     fn retrieve_cert(&mut self, signature_cert_chain_url: &str) -> Result<(), Error> {
-        // Get cert from SignatureCertChainUrl
+        // Get cert using validated SignatureCertChainUrl
         let mut resp = reqwest::get(signature_cert_chain_url)?;
         let mut buf: Vec<u8> = vec![];
         resp.copy_to(&mut buf)?;
 
-        // Add cert to cert cache
+        // Add to cert cache
         let _ = self
             .cert_cache
             .insert(signature_cert_chain_url.to_string(), buf);
@@ -251,6 +360,7 @@ impl RequestVerifier {
         timestamp: &str,
         timestamp_tolerance_millis: Option<u64>,
     ) -> Result<(), Error> {
+        // If no tolerance is provided, use DEFAULT
         let tolerance_millis = {
             if let Some(t) = timestamp_tolerance_millis {
                 Duration::milliseconds(t as i64)
@@ -258,22 +368,27 @@ impl RequestVerifier {
                 Duration::milliseconds(DEFAULT_TIMESTAMP_TOLERANCE_IN_MILLIS)
             }
         };
+
+        // Make sure tolerance is not higher than max allowed by Alexa
         if tolerance_millis > Duration::milliseconds(MAX_TIMESTAMP_TOLERANCE_IN_MILLIS) {
             bail!(VerificationError::TimestampMax {
                 millis: tolerance_millis.num_milliseconds()
             });
         }
 
+        // Timestamp is in ISO 8601 format
         let timestamp =
             time::strptime(timestamp, "%FT%TZ").context(VerificationError::TimestampParse {
                 timestamp: timestamp.to_owned(),
             })?;
         let utc_now = time::now_utc();
 
+        // Ensure request received within tolerance milliseconds
         let duration_between = utc_now - timestamp;
         if duration_between > tolerance_millis {
             bail!(VerificationError::Timestamp);
         };
+
         Ok(())
     }
 }

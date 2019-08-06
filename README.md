@@ -1,16 +1,16 @@
 # Alexa Rust Webservice Verifier
 
-Verify that requests were sent by Alexa, in Rust
+Verify that incoming requests are from Alexa for custom, webservice skills.
 
+- [Documentation](https://docs.rs/alexa-verifier)
 - [Developer Documentation](https://developer.amazon.com/docs/custom-skills/host-a-custom-skill-as-a-web-service.html#manually-verify-request-sent-by-alexa)
 
 ## About
-- RequestVerifier caches certs on the first request
-- Initializes with `RequestVerifier::new()`
+- `RequestVerifier` caches certs on the first request
+- Initialize with `RequestVerifier::new()`
 - Method `verify() -> Result<(), Error>` returns `Ok` if verified successfully and `Error` if failed
 
 ```rust
-
     pub struct RequestVerifier {
         cert_cache: HashMap<String, Vec<u8>>,
     }
@@ -45,7 +45,7 @@ Verify that requests were sent by Alexa, in Rust
 
 ```rust
 use crate::skill::process_request; // Entry point to custom skill
-use alexa_verifier::RequestVerifier;
+use alexa_verifier::RequestVerifier; // Struct provided by this crate
 use log::{debug, error, info};
 use rouille::{router, Request, Response};
 use std::{
@@ -97,7 +97,7 @@ fn note_routes(request: &Request, verifier: &mut MutexGuard<RequestVerifier>) ->
                 };
             debug!("Request is validated...");
 
-            // Entry point to skill, returning alexa_sdk::Response
+            // Entry point to custom skill, returning alexa_sdk::Response
             let response = Response::json(&process_request(request));
             info!("Sending back response...");
             debug!("{:?}", response);
