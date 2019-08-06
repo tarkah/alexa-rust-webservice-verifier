@@ -99,11 +99,13 @@ impl RequestVerifier {
     ) -> Result<(), Error> {
         self.validate_cert_url(&signature_cert_chain_url)?;
 
-        // Look for certificate in cache, get it if it doesn't exist
+        // Look for certificate in cache, download it if it doesn't exist
+        let mut not_exists = false;
         if !self
             .cert_cache
             .contains_key(&signature_cert_chain_url.to_string())
         {
+            not_exists = true;
             self.retrieve_cert(&signature_cert_chain_url)
                 .context(VerificationError::RetrieveCert)?;
         }
@@ -127,6 +129,8 @@ impl RequestVerifier {
         }
 
         // Make sure domain is in SAN extension
+        // Only need to validate first time cert is downloaded
+        if not_exists {
         let mut sans: Vec<&str> = Vec::new();
         for ext in &certificate.tbs_certificate.extensions {
             if ext.oid == x509_parser::objects::nid2obj(&Nid::SubjectAltName).unwrap() {
@@ -134,7 +138,9 @@ impl RequestVerifier {
                     .map_err(|_| VerificationError::CertExtParse)?;
                 for b in ber.into_iter() {
                     if let der_parser::ber::BerObjectContent::Unknown(_, i) = b.content {
-                        sans.push(std::str::from_utf8(i).context(VerificationError::SanExtension)?)
+                            sans.push(
+                                std::str::from_utf8(i).context(VerificationError::SanExtension)?,
+                            )
                     } else {
                         bail!(VerificationError::SanExtension)
                     }
@@ -143,6 +149,7 @@ impl RequestVerifier {
         }
         if !sans.contains(&CERT_CHAIN_DOMAIN) {
             bail!(VerificationError::DomainNotInSan)
+        }
         }
 
         // Get primary key for signature verification
