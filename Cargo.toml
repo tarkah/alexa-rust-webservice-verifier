@@ -3,6 +3,11 @@ name = "alexa-verifier"
 version = "0.1.0"
 authors = ["Cory Forsstrom <cforsstrom18@gmail.com>"]
 edition = "2018"
+description = "Verify that requests were sent by Alexa for custom webservice skills, in Rust"
+license = "MIT"
+repository = "https://github.com/tarkah/alexa-rust-webservice-verifier"
+readme = "README.md"
+keywords = ["alexa", "skill", "verify", "webservice"]
 
 [lib]
 name = "alexa_verifier"
