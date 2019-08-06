@@ -1,4 +1,4 @@
-# Rust Alexa Webservice Verifier
+# Alexa Rust Webservice Verifier
 
 Verify that requests were sent by Alexa, in Rust
 
