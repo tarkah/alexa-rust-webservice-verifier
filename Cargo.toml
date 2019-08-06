@@ -1,6 +1,6 @@
 [package]
 name = "alexa-verifier"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["Cory Forsstrom <cforsstrom18@gmail.com>"]
 edition = "2018"
 description = "Verify that requests were sent by Alexa for custom webservice skills, in Rust"
