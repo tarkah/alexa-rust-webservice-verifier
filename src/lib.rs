@@ -95,8 +95,10 @@ mod normalize;
 
 #[cfg(feature = "sync")]
 mod sync;
+#[cfg(feature = "sync")]
 pub use sync::RequestVerifier;
 
 #[cfg(feature = "async")]
 mod r#async;
+#[cfg(feature = "async")]
 pub use r#async::RequestVerifierAsync;
