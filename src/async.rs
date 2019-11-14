@@ -5,7 +5,6 @@ use crate::{
 };
 use failure::{bail, Error, ResultExt};
 use futures_util::lock::Mutex;
-use log::debug;
 use std::{collections::HashMap, path::Path};
 use time::Duration;
 use url::{Host, Url};
@@ -161,8 +160,6 @@ impl RequestVerifierAsync {
             .lock()
             .await
             .insert(signature_cert_chain_url.to_string(), bytes.to_vec());
-
-        debug!("New cert retrieved and cached");
 
         Ok(())
     }
