@@ -15,7 +15,7 @@ path = "src/lib.rs"
 
 [features]
 default = ['sync', 'async']
-sync = []
+sync = ['reqwest/blocking']
 async = ['futures-util']
 
 [dependencies]
@@ -25,7 +25,7 @@ failure = "0.1"
 futures-util = { version = "0.3", optional = true }
 log = "0.4"
 ring = { version = "0.16", features = ['std'] }
-reqwest = { version = "0.10.0-alpha.2", features = ['blocking'] }
+reqwest = "0.10.0-alpha.2"
 time = "0.1"
 url = "2.0"
 x509-parser = "0.5"
