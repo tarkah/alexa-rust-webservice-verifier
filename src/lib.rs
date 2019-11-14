@@ -22,12 +22,9 @@
 //! use alexa_verifier::RequestVerifier; // Struct provided by this crate
 //! use log::{debug, error, info};
 //! use rouille::{router, Request, Response};
-//! use std::{
-//!     io::Read,
-//!     sync::{Mutex, MutexGuard},
-//! };
+//! use std::io::Read;
 //!
-//! fn note_routes(request: &Request, verifier: &mut MutexGuard<RequestVerifier>) -> Response {
+//! fn note_routes(request: &Request, verifier: &RequestVerifier) -> Response {
 //!     router!(request,
 //!         (POST) (/) => {
 //!             info!("Request received...");
@@ -83,11 +80,10 @@
 //!
 //! pub fn run() -> std::io::Result<()> {
 //!     info!("Starting server on 0.0.0.0:8086");
-//!     let verifier = Mutex::from(RequestVerifier::new());
+//!     let verifier = RequestVerifier::new();
 //!
 //!     rouille::start_server("0.0.0.0:8086", move |request| {
-//!         let mut verifier = verifier.lock().unwrap();
-//!         note_routes(&request, &mut verifier)
+//!         note_routes(&request, &verifier)
 //!     });
 //! }
 //! ```
